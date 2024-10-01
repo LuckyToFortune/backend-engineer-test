@@ -1,64 +1,32 @@
 import Fastify from 'fastify';
-import { Pool } from 'pg';
-import { randomUUID } from 'crypto';
+import { createTables } from './db/pool';
+import { blockRoutes } from './routes/block.routes';
+import { balanceRoutes } from './routes/balance.routes';
+import { rollbackRoutes } from './routes/rollback.routes';
 
-const fastify = Fastify({ logger: true });
-
-fastify.get('/', async (request, reply) => {
-  return { hello: 'world' };
+const app = Fastify({
+  logger: true,
 });
 
-async function testPostgres(pool: Pool) {
-  const id = randomUUID();
-  const name = 'Satoshi';
-  const email = 'Nakamoto';
+app.get("/", async(request, reply) => {
+  return { hello: "world" }
+})
 
-  await pool.query(`DELETE FROM users;`);
+app.register(blockRoutes);
+app.register(balanceRoutes);
+app.register(rollbackRoutes);
 
-  await pool.query(`
-    INSERT INTO users (id, name, email)
-    VALUES ($1, $2, $3);
-  `, [id, name, email]);
-
-  const { rows } = await pool.query(`
-    SELECT * FROM users;
-  `);
-
-  console.log('USERS', rows);
-}
-
-async function createTables(pool: Pool) {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL
-    );
-  `);
-}
-
-async function bootstrap() {
-  console.log('Bootstrapping...');
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required');
+// Start the server and create tables
+const startServer = async () => {
+  try {
+    await createTables();
+    await app.listen({ port: 3000, host: '0.0.0.0' });
+    console.log('Server running on port 3000');
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
   }
-
-  const pool = new Pool({
-    connectionString: databaseUrl
-  });
-
-  await createTables(pool);
-  await testPostgres(pool);
-}
-
-try {
-  await bootstrap();
-  await fastify.listen({
-    port: 3000,
-    host: '0.0.0.0'
-  })
-} catch (err) {
-  fastify.log.error(err)
-  process.exit(1)
 };
+
+startServer();
+
